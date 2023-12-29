@@ -1,4 +1,4 @@
-import { ErrorBoundary, Show, Suspense, createContext, createSignal, useContext } from 'solid-js'
+import { ErrorBoundary, Show, Suspense, createContext, createMemo, createResource, createSignal, useContext } from 'solid-js'
 import * as api from "./api.ts"
 import AuthScreen from './AuthScreen.tsx'
 import MainScreen from './MainScreen.tsx'
@@ -7,6 +7,7 @@ type Ctx = {
     wsClient: api.WebsocketClient
     me: {
         name: string
+        color: string
     }
 }
 
@@ -24,6 +25,24 @@ function App() {
     const [name, setName] = createSignal("")
     const [wsClient, setWsClient] = createSignal<api.WebsocketClient | null>(null)
 
+    const choosedName = createMemo(() => {
+        if (wsClient() && name()) return name()
+
+        return null
+    })
+
+    const [color] = createResource(choosedName, api.getUsersColor)
+
+    const credentials = createMemo(() => {
+        const w = wsClient()
+        const n = choosedName()
+        const c = color()
+
+        if (w && n && c) return [w, n, c] as const
+
+        return null
+    })
+
     function auth(name: string) {
         const client = new api.WebsocketClient(name)
 
@@ -36,14 +55,15 @@ function App() {
 
     return (
         <Show
-            when={wsClient()}
+            when={credentials()}
             fallback={<AuthScreen auth={auth} name={name} setName={setName} />}
         >
-            {(wsClient) =>
+            {(credentials) =>
                 <AppContext.Provider value={{
-                    wsClient: wsClient(),
+                    wsClient: credentials()[0],
                     me: {
-                        name: name(),
+                        name: credentials()[1],
+                        color: credentials()[2]
                     }
                 }}>
                     <ErrorBoundary fallback={(err) => <p>{err.toString()}</p>}>

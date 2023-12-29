@@ -1,9 +1,10 @@
-import { Accessor, For, Show, Suspense, createResource, createSignal, lazy, useContext } from "solid-js"
+import { Accessor, For, Show, Suspense, createEffect, createResource, createSignal, lazy, useContext } from "solid-js"
 import * as api from "./api.ts"
 import { CMDS, WSMessage } from "./definitions.ts"
 import Canvases from "./components/Canvases.tsx"
 import { useAppContext } from "./App.tsx"
 import MyCanvas from "./components/MyCanvas.tsx"
+import Cursors from "./components/Cursors.tsx"
 
 export default function MainScreen() {
     const { wsClient, me } = useAppContext()
@@ -16,25 +17,29 @@ export default function MainScreen() {
         }
     })
 
-    const [existingDraws] = createResource(api.getExistingDraws)
-
-    const [users, { mutate: setUsers }] = createResource(api.getUsers, {
-        initialValue: {},
-    })
+    const [users, { mutate: setUsers }] = createResource(
+        () => api.getUsers(me.name),
+        {
+            initialValue: {},
+            storage: (value) => createSignal(value, { equals: false })
+        }
+    )
 
     function handleOnline(user: string, message: WSMessage) {
         switch (message.cmd) {
             case CMDS.REG: {
-                setUsers((prev) => ({ ...prev, [user]: message.payload }))
+                setUsers((prev) => {
+                    prev[user] = message.payload
+
+                    return prev
+                })
                 break
             }
             case CMDS.UNREG: {
                 setUsers((prev) => {
-                    const updated = { ...prev }
+                    delete prev[user]
 
-                    delete updated[user]
-
-                    return updated
+                    return prev
                 })
                 break
             }
@@ -44,9 +49,10 @@ export default function MainScreen() {
     return (
         <div class="screen">
             <Suspense fallback={<p>Loading...</p>}>
-                <Show when={existingDraws() && users()} fallback={<p>Something went wrong</p>}>
+                <Show when={users()} fallback={<p>Something went wrong</p>}>
                     <Canvases users={users()} />
-                    <MyCanvas myColor={users()[me.name]} />
+                    <MyCanvas />
+                    <Cursors users={users()} />
                 </Show>
             </Suspense>
         </div>

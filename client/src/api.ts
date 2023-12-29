@@ -3,10 +3,14 @@ import { WSMessage } from "./definitions"
 const apipath = `http://${import.meta.env.VITE_SERVER_URL}/api`
 const apipathws = `ws://${import.meta.env.VITE_SERVER_URL}/api`
 
-export async function getUsers() {
+export async function getUsers(name: string) {
     const resp = await fetch(`${apipath}/users`)
 
-    return await resp.json() as Record<string, string>
+    const json = await resp.json() as Record<string, string>
+
+    delete json[name]
+
+    return json
 }
 
 export async function getUsersColor(name: string) {
@@ -21,6 +25,16 @@ export async function getExistingDraws() {
     return await resp.json() as Record<string, WSMessage[]>
 }
 
+export async function getLastPositions(name: string) {
+    const resp = await fetch(`${apipath}/last-positions`)
+
+    const json = await resp.json() as Record<string, WSMessage>
+
+    delete json[name]
+
+    return json
+}
+
 export class WebsocketClient {
     connection: WebSocket
 
@@ -28,7 +42,7 @@ export class WebsocketClient {
         this.connection = new WebSocket(`${apipathws}/ws?name=${myName}`)
     }
 
-    send(obj: Object) {
+    send(obj: WSMessage) {
         this.connection.send(JSON.stringify(obj))
     }
 }

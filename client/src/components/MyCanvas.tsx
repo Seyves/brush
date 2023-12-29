@@ -2,18 +2,14 @@ import { useAppContext } from "../App";
 import { CMDS, Coords } from "../definitions";
 import { createThrottler } from "../utils";
 
-interface Props {
-    myColor: string
-}
-
-export default function MyCanvas(props: Props) {
-    const { wsClient } = useAppContext()
+export default function MyCanvas() {
+    const { wsClient, me } = useAppContext()
 
     const canvas = document.createElement("canvas")
     const ctx = canvas.getContext("2d") as CanvasRenderingContext2D
 
-    canvas.width = window.innerWidth
-    canvas.height = window.innerHeight
+    canvas.width = screen.width
+    canvas.height = screen.height
 
     canvas.classList.add("canvas")
 
@@ -33,9 +29,9 @@ export default function MyCanvas(props: Props) {
     const throttledDraw = createThrottler(function(coords: Coords) {
         ctx.lineJoin = "round"
         ctx.lineWidth = 9
-        ctx.strokeStyle = props.myColor
+        ctx.strokeStyle = me.color
 
-        ctx.lineTo(coords.x, coords.y)
+        ctx.lineTo(+coords.x, +coords.y)
         ctx.stroke()
 
         wsClient.send({
