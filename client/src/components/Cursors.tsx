@@ -1,8 +1,10 @@
-import { For, createEffect, createMemo, createResource, createSignal } from "solid-js";
+import { For, createEffect, createResource, createSignal, on } from "solid-js";
 import { useAppContext } from "../App";
-import { CMDS, WSMessage } from "../definitions";
+import { CMDS, Coords, WSMessage } from "../definitions";
 import * as api from "../api.ts"
 import Cursor from "./Cursor.tsx";
+import { pageOffsetSignal } from "./MyCanvas.tsx";
+import { scrollOffsetSignal } from "./Canvases.tsx";
 
 interface Props {
     users: Record<string, string>
@@ -11,27 +13,28 @@ interface Props {
 export default function Cursors(props: Props) {
     const { wsClient, me } = useAppContext()
 
+    const [getPageOffset] = pageOffsetSignal
+    const [getScrollOffset] = scrollOffsetSignal
+
     const [lastPositions, { mutate: setLastPositions }] = createResource(
         () => api.getLastPositions(me.name),
         {
             initialValue: {},
-            storage: (value) => createSignal(value, { equals: false })
+            storage: (val) => createSignal(val, { equals: false })
         }
     )
 
-    createEffect(() => {
-        props.users
+    createEffect(on(() => props.users, (users) => {
+        setLastPositions((lastPositions) => {
+            for (const user in lastPositions) {
+                if (users.hasOwnProperty(user)) continue
 
-        setLastPositions((prev) => {
-            for (const user in prev) {
-                if (props.users.hasOwnProperty(user)) continue
-
-                delete prev[user]
+                delete lastPositions[user]
             }
 
-            return prev
+            return lastPositions
         })
-    })
+    }))
 
     wsClient.connection.addEventListener("message", function(unparsed) {
         const parsed = JSON.parse(unparsed.data)
@@ -43,10 +46,10 @@ export default function Cursors(props: Props) {
         switch (message.cmd) {
             case CMDS.LINE:
             case CMDS.MOVE: {
-                setLastPositions((prev) => {
-                    prev[user] = message
+                setLastPositions(lastPositions => {
+                    lastPositions[user] = message
 
-                    return prev
+                    return lastPositions
                 })
             }
         }
@@ -55,11 +58,22 @@ export default function Cursors(props: Props) {
     return (
         <For each={Object.keys(lastPositions())}>
             {(name) => {
-                const coords = createMemo(() => {
-                    const [x, y] = lastPositions()[name].payload.split(";")
+                function coords() {
+                    const msg = lastPositions()[name]
 
-                    return { x, y }
-                })
+                    const pos = msg.cmd === CMDS.LINE ?
+                        msg.payload.split(",")[1] :
+                        msg.payload
+
+                    const [pageOffsetX, pageOffsetY] = getPageOffset()
+                    const [scrollOffsetX, scrollOffsetY] = getScrollOffset()
+                    const [x, y] = pos.split(";").map(Number)
+
+                    return [
+                        Math.round(x + pageOffsetX + scrollOffsetX),
+                        Math.round(y + pageOffsetY + scrollOffsetY)
+                    ] as const
+                }
 
                 return <Cursor
                     name={name}

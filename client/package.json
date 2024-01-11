@@ -9,6 +9,7 @@
         "preview": "vite preview"
     },
     "dependencies": {
+        "@solid-primitives/map": "^0.4.8",
         "solid-js": "^1.8.7"
     },
     "devDependencies": {

@@ -1,7 +1,4 @@
-export interface Coords {
-    x: number | string
-    y: number | string
-}
+export type Coords = readonly [number, number]
 
 export const CMDS = {
     LINE: "line",
@@ -9,6 +6,7 @@ export const CMDS = {
     REG: "reg",
     UNREG: "unreg",
     MOVE: "move",
+    UNDO: "undo"
 } as const
 
 export type Command = (typeof CMDS)[keyof typeof CMDS]

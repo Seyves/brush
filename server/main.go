@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
@@ -258,6 +259,30 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			drawStore[myConnInfo.Name] = append(drawStore[myConnInfo.Name], parsedMessage)
+		}
+
+		if parsedMessage.Cmd == "undo" {
+			eraseUntil, err := strconv.Atoi(parsedMessage.Payload)
+
+			if err != nil {
+				log.Print(err)
+				break
+			}
+
+			myStore, isExist := drawStore[myConnInfo.Name]
+
+			if !isExist {
+				log.Print("No such user in drawStore")
+				break
+			}
+
+			undoneStore := myStore[0:eraseUntil]
+
+			drawStore[myConnInfo.Name] = undoneStore
+
+			bytes, err := json.Marshal(undoneStore)
+
+			outcoming.Message.Payload = string(bytes)
 		}
 
 		broadcast(conn, &outcoming)

@@ -1,4 +1,4 @@
-import { Accessor, For, Show, Suspense, createEffect, createResource, createSignal, lazy, useContext } from "solid-js"
+import { Accessor, For, Show, Signal, Suspense, createEffect, createResource, createSignal, lazy, useContext } from "solid-js"
 import * as api from "./api.ts"
 import { CMDS, WSMessage } from "./definitions.ts"
 import Canvases from "./components/Canvases.tsx"
@@ -21,38 +21,49 @@ export default function MainScreen() {
         () => api.getUsers(me.name),
         {
             initialValue: {},
-            storage: (value) => createSignal(value, { equals: false })
         }
     )
+
+    const [existingDraws] = createResource(api.getExistingDraws)
 
     function handleOnline(user: string, message: WSMessage) {
         switch (message.cmd) {
             case CMDS.REG: {
-                setUsers((prev) => {
-                    prev[user] = message.payload
-
-                    return prev
-                })
+                setUsers((users) => ({ ...users, [user]: message.payload }))
                 break
             }
             case CMDS.UNREG: {
-                setUsers((prev) => {
-                    delete prev[user]
+                setUsers((users) => {
+                    const clone = { ...users }
 
-                    return prev
+                    delete clone[user]
+
+                    return clone
                 })
                 break
             }
         }
     }
 
+    //its terrible
+    function loader() {
+        const u = users()
+        const e = existingDraws()
+        if (u && e) return [u, e] as const
+
+        return null
+    }
+
     return (
-        <div class="screen">
+        <div class="screen" id="main-screen">
             <Suspense fallback={<p>Loading...</p>}>
-                <Show when={users()} fallback={<p>Something went wrong</p>}>
-                    <Canvases users={users()} />
-                    <MyCanvas />
-                    <Cursors users={users()} />
+                <Show when={loader()} fallback={<p>Something went wrong</p>}>
+                    {(loaded) =>
+                        <>
+                            <Canvases users={loaded()[0]} existingDraws={loaded()[1]} />
+                            <Cursors users={loaded()[0]} />
+                        </>
+                    }
                 </Show>
             </Suspense>
         </div>

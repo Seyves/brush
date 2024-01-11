@@ -1,4 +1,3 @@
-import { createMemo } from "solid-js"
 import { Coords } from "../definitions"
 
 interface Props {
@@ -19,15 +18,15 @@ export default function Cursor(props: Props) {
         </svg >
     )
 
-    const style = createMemo(() => {
+    function getStyle() {
         return {
-            transform: `translate(${props.nextPosition.x}px, ${props.nextPosition.y}px)`,
+            transform: `translate(${props.nextPosition[0]}px, ${props.nextPosition[1]}px)`,
             transition: props.isSoft ? "all 0.14s" : "all 0.05s"
         }
-    })
+    }
 
     return (
-        <div class="cursor" style={style()}>
+        <div class="cursor" style={getStyle()}>
             {svg}
             <p>{props.name}</p>
         </div>

@@ -1,7 +1,8 @@
-import { ErrorBoundary, Show, Suspense, createContext, createMemo, createResource, createSignal, useContext } from 'solid-js'
+import { ErrorBoundary, Show, Signal, Suspense, createContext, createMemo, createResource, createSignal, useContext } from 'solid-js'
 import * as api from "./api.ts"
 import AuthScreen from './AuthScreen.tsx'
 import MainScreen from './MainScreen.tsx'
+import { Coords } from './definitions.ts'
 
 type Ctx = {
     wsClient: api.WebsocketClient
@@ -66,9 +67,7 @@ function App() {
                         color: credentials()[2]
                     }
                 }}>
-                    <ErrorBoundary fallback={(err) => <p>{err.toString()}</p>}>
-                        <MainScreen />
-                    </ErrorBoundary>
+                    <MainScreen />
                 </AppContext.Provider>
             }
         </Show>

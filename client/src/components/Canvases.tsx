@@ -1,19 +1,27 @@
-import { For, createEffect, createMemo, createResource, onMount } from "solid-js"
-import { CMDS, WSMessage } from "../definitions"
+import { For, createEffect, createResource, createSignal, onMount } from "solid-js"
+import { CMDS, Coords, WSMessage } from "../definitions"
 import { useAppContext } from "../App.tsx"
 import * as api from "../api.ts"
+import MyCanvas from "./MyCanvas.tsx"
 
 interface Props {
     users: Record<string, string>
+    existingDraws: Record<string, WSMessage[]>
 }
+
+export const scrollOffsetSignal = createSignal<Coords>([0, 0])
 
 export default function Canvases(props: Props) {
     const { wsClient } = useAppContext()
 
+    const [getScrollOffset, setScrollOffset] = scrollOffsetSignal
+
+    let band: HTMLDivElement | undefined
+
     const canvases: Record<string, HTMLCanvasElement> = {}
     const contexts: Record<string, CanvasRenderingContext2D> = {}
 
-    const [existingDraws] = createResource(api.getExistingDraws)
+    const pixelRatio = window.devicePixelRatio
 
     createEffect(() => {
         for (const user in props.users) {
@@ -22,8 +30,10 @@ export default function Canvases(props: Props) {
             if (!contexts.hasOwnProperty(user)) {
                 const context = canvas.getContext("2d") as CanvasRenderingContext2D
 
-                canvas.width = screen.width
-                canvas.height = screen.height
+                canvas.style.width = `1920px`
+                canvas.style.height = `1080px`
+                canvas.width = 1920 * window.devicePixelRatio
+                canvas.height = 1080 * window.devicePixelRatio
 
                 contexts[user] = context
             }
@@ -36,11 +46,9 @@ export default function Canvases(props: Props) {
         }
     })
 
-    onMount(function() {
-        const exDraws = existingDraws()
-
-        for (const user in exDraws) {
-            for (const message of exDraws[user]) {
+    onMount(() => {
+        for (const user in props.existingDraws) {
+            for (const message of props.existingDraws[user]) {
                 handleDraw(user, message)
             }
         }
@@ -57,14 +65,17 @@ export default function Canvases(props: Props) {
             case CMDS.LINE: {
                 const ctx = contexts[user]
 
-                const [x, y] = message.payload.split(";")
+                const [size, pos] = message.payload.split(",")
+
+                const [x, y] = pos.split(";").map(Number)
 
                 ctx.lineJoin = "round"
-                ctx.lineWidth = 9
+                ctx.lineCap = "round"
+                ctx.lineWidth = +size * pixelRatio
 
                 ctx.strokeStyle = props.users[user]
 
-                ctx.lineTo(+x, +y)
+                ctx.lineTo(x * pixelRatio, y * pixelRatio)
                 ctx.stroke()
 
                 break
@@ -77,12 +88,35 @@ export default function Canvases(props: Props) {
 
                 break
             }
+            case CMDS.UNDO: {
+                const canvas = canvases[user]
+                const ctx = contexts[user]
+
+                const parsedMsgs = JSON.parse(message.payload) as WSMessage[]
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+                for (const msg of parsedMsgs) {
+                    handleDraw(user, msg)
+                }
+
+                break
+            }
         }
     }
 
     return (
-        <For each={Object.keys(props.users)}>{(user) => {
-            return <canvas class="canvas" ref={canvases[user]}></canvas>
-        }}</For>
+        <div class="canvases-band" ref={band} onScroll={(event: Event) => {
+            const target = event.target
+
+            setScrollOffset([target.scrollLeft, target.scrollTop])
+        }}>
+            <div id="canvases">
+                <For each={Object.keys(props.users)}>{(user) => {
+                    return <canvas class="canvas" ref={canvases[user]}></canvas>
+                }}</For>
+                <MyCanvas />
+            </div>
+        </div >
     )
 }
