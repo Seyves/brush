@@ -1,0 +1,17 @@
+FROM node:18-alpine
+
+WORKDIR /client-app
+
+ENV VITE_SERVER_URL=127.0.0.1:8002
+
+EXPOSE 8001
+
+COPY package.json ./
+
+RUN npm install
+
+COPY . ./
+
+RUN npm run build
+
+CMD [ "npm", "run", "preview" ]

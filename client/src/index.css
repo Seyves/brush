@@ -5,6 +5,12 @@
     font-style: normal;
 }
 
+.room-id {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
 body {
     color: white;
     font-size: 24px;

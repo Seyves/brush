@@ -3,43 +3,59 @@ import { WSMessage } from "./definitions"
 const apipath = `http://${import.meta.env.VITE_SERVER_URL}/api`
 const apipathws = `ws://${import.meta.env.VITE_SERVER_URL}/api`
 
-export async function getUsers(name: string) {
-    const resp = await fetch(`${apipath}/users`)
+export async function createRoom() {
+    const resp = await fetch(`${apipath}/rooms`, {method: "POST"})
 
-    const json = await resp.json() as Record<string, string>
-
-    delete json[name]
-
-    return json
+    return await resp.text()
 }
 
-export async function getUsersColor(name: string) {
-    const resp = await fetch(`${apipath}/color/${name}`)
+export class RestClient {
+    roomId: string
+    name: string
 
-    return await resp.text() as string
-}
+    constructor(roomId: string, name: string) {
+        this.roomId = roomId
+        this.name = name
+    }
 
-export async function getExistingDraws() {
-    const resp = await fetch(`${apipath}/draws`)
+    async getUsers() {
+        const resp = await fetch(`${apipath}/rooms/${this.roomId}/users`)
 
-    return await resp.json() as Record<string, WSMessage[]>
-}
+        const json = await resp.json() as Record<string, string>
 
-export async function getLastPositions(name: string) {
-    const resp = await fetch(`${apipath}/last-positions`)
+        delete json[this.name]
 
-    const json = await resp.json() as Record<string, WSMessage>
+        return json
+    }
 
-    delete json[name]
+    async getUsersColor(name: string) {
+        const resp = await fetch(`${apipath}/rooms/${this.roomId}/color/${name}`)
 
-    return json
+        return await resp.text() as string
+    }
+
+    async getExistingDraws() {
+        const resp = await fetch(`${apipath}/rooms/${this.roomId}/draws`)
+
+        return await resp.json() as Record<string, WSMessage[]>
+    }
+
+    async getLastPositions() {
+        const resp = await fetch(`${apipath}/rooms/${this.roomId}/last-positions`)
+
+        const json = await resp.json() as Record<string, WSMessage>
+
+        delete json[this.name]
+
+        return json
+    }
 }
 
 export class WebsocketClient {
     connection: WebSocket
 
-    constructor(myName: string) {
-        this.connection = new WebSocket(`${apipathws}/ws?name=${myName}`)
+    constructor(roomId: string, name: string) {
+        this.connection = new WebSocket(`${apipathws}/rooms/${roomId}/ws?name=${name}`)
     }
 
     send(obj: WSMessage) {

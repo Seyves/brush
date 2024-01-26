@@ -1,7 +1,6 @@
-import { For, createEffect, createResource, createSignal, onMount } from "solid-js"
+import { For, createEffect, createSignal, onMount } from "solid-js"
 import { CMDS, Coords, WSMessage } from "../definitions"
 import { useAppContext } from "../App.tsx"
-import * as api from "../api.ts"
 import MyCanvas from "./MyCanvas.tsx"
 
 interface Props {
@@ -14,7 +13,7 @@ export const scrollOffsetSignal = createSignal<Coords>([0, 0])
 export default function Canvases(props: Props) {
     const { wsClient } = useAppContext()
 
-    const [getScrollOffset, setScrollOffset] = scrollOffsetSignal
+    const [_, setScrollOffset] = scrollOffsetSignal
 
     let band: HTMLDivElement | undefined
 
@@ -106,7 +105,7 @@ export default function Canvases(props: Props) {
     }
 
     return (
-        <div class="canvases-band" ref={band} onScroll={(event: Event) => {
+        <div class="canvases-band" ref={band} onScroll={(event) => {
             const target = event.target
 
             setScrollOffset([target.scrollLeft, target.scrollTop])

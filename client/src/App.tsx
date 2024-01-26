@@ -1,10 +1,10 @@
-import { ErrorBoundary, Show, Signal, Suspense, createContext, createMemo, createResource, createSignal, useContext } from 'solid-js'
-import * as api from "./api.ts"
+import { Show, createContext, createSignal, useContext } from 'solid-js'
 import AuthScreen from './AuthScreen.tsx'
 import MainScreen from './MainScreen.tsx'
-import { Coords } from './definitions.ts'
+import * as api from "./api.ts"
 
-type Ctx = {
+export type Credentials = {
+    restClient: api.RestClient
     wsClient: api.WebsocketClient
     me: {
         name: string
@@ -12,7 +12,7 @@ type Ctx = {
     }
 }
 
-const AppContext = createContext<Ctx>()
+const AppContext = createContext<Credentials>()
 
 export function useAppContext() {
     const ctx = useContext(AppContext)
@@ -23,50 +23,15 @@ export function useAppContext() {
 }
 
 function App() {
-    const [name, setName] = createSignal("")
-    const [wsClient, setWsClient] = createSignal<api.WebsocketClient | null>(null)
-
-    const choosedName = createMemo(() => {
-        if (wsClient() && name()) return name()
-
-        return null
-    })
-
-    const [color] = createResource(choosedName, api.getUsersColor)
-
-    const credentials = createMemo(() => {
-        const w = wsClient()
-        const n = choosedName()
-        const c = color()
-
-        if (w && n && c) return [w, n, c] as const
-
-        return null
-    })
-
-    function auth(name: string) {
-        const client = new api.WebsocketClient(name)
-
-        function onOpen() {
-            setWsClient(client)
-        }
-
-        client.connection.onopen = onOpen
-    }
+    const [credentials, setCredentials] = createSignal<null | Credentials>(null)
 
     return (
         <Show
             when={credentials()}
-            fallback={<AuthScreen auth={auth} name={name} setName={setName} />}
+            fallback={<AuthScreen setCredentials={setCredentials} />}
         >
             {(credentials) =>
-                <AppContext.Provider value={{
-                    wsClient: credentials()[0],
-                    me: {
-                        name: credentials()[1],
-                        color: credentials()[2]
-                    }
-                }}>
+                <AppContext.Provider value={credentials()}>
                     <MainScreen />
                 </AppContext.Provider>
             }

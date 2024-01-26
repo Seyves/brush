@@ -1,13 +1,11 @@
-import { Accessor, For, Show, Signal, Suspense, createEffect, createResource, createSignal, lazy, useContext } from "solid-js"
-import * as api from "./api.ts"
+import { Show, Suspense, createResource, } from "solid-js"
 import { CMDS, WSMessage } from "./definitions.ts"
 import Canvases from "./components/Canvases.tsx"
 import { useAppContext } from "./App.tsx"
-import MyCanvas from "./components/MyCanvas.tsx"
 import Cursors from "./components/Cursors.tsx"
 
 export default function MainScreen() {
-    const { wsClient, me } = useAppContext()
+    const { wsClient, restClient } = useAppContext()
 
     wsClient.connection.addEventListener("message", function(unparsed) {
         const parsed = JSON.parse(unparsed.data)
@@ -17,14 +15,11 @@ export default function MainScreen() {
         }
     })
 
-    const [users, { mutate: setUsers }] = createResource(
-        () => api.getUsers(me.name),
-        {
-            initialValue: {},
-        }
-    )
+    const [users, { mutate: setUsers }] = createResource(() => restClient.getUsers(), {
+        initialValue: {},
+    })
 
-    const [existingDraws] = createResource(api.getExistingDraws)
+    const [existingDraws] = createResource(() => restClient.getExistingDraws())
 
     function handleOnline(user: string, message: WSMessage) {
         switch (message.cmd) {
@@ -60,6 +55,7 @@ export default function MainScreen() {
                 <Show when={loader()} fallback={<p>Something went wrong</p>}>
                     {(loaded) =>
                         <>
+                            <div class="room-id">room id: {restClient.roomId}</div>
                             <Canvases users={loaded()[0]} existingDraws={loaded()[1]} />
                             <Cursors users={loaded()[0]} />
                         </>

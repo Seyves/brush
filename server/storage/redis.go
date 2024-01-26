@@ -1,9 +1,13 @@
 package storage
 
-import "github.com/redis/go-redis/v9"
+import (
+	"os"
+
+	"github.com/redis/go-redis/v9"
+)
 
 var Redis = redis.NewClient(&redis.Options{
-    Addr: "localhost:6379",
+    Addr: os.Getenv("REDIS_URL"),
     Password: "",
     DB: 0,
 })

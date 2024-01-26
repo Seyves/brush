@@ -1,0 +1,14 @@
+FROM golang:1.21
+
+WORKDIR /app
+
+COPY . . 
+
+ENV REDIS_URL=redis:6379
+
+RUN go get
+RUN go build -o /build
+
+EXPOSE 8002
+
+ENTRYPOINT [ "/build" ]

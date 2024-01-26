@@ -9,7 +9,7 @@ type Color struct {
 }
 
 func (color *Color) GetHex() string {
-	return fmt.Sprintf("#%02X%02X%02X", color.red, color.green, color.blue)
+	return fmt.Sprintf("#%02X%02X%02X", color.Red, color.Green, color.Blue)
 }
 
 type IncomingMessage struct {

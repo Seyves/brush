@@ -1,18 +1,15 @@
-import { createEffect, createSignal, on, onMount, untrack } from "solid-js";
+import { createEffect, createSignal, on, onMount}  from "solid-js";
 import { useAppContext } from "../App";
 import { CMDS, Coords, WSMessage } from "../definitions";
 import { createThrottler } from "../utils";
 import { scrollOffsetSignal } from "./Canvases";
 
-interface Props {
-}
-
 export const pageOffsetSignal = createSignal<Coords>([0, 0])
 
-export default function MyCanvas(props: Props) {
-    const { 
-        wsClient, 
-        me 
+export default function MyCanvas() {
+    const {
+        wsClient,
+        me
     } = useAppContext()
 
     const [getPageOffset, setPageOffset] = pageOffsetSignal
@@ -111,6 +108,8 @@ export default function MyCanvas(props: Props) {
         createEffect(on(getScrollOffset, endLine))
 
         const undo = function() {
+            if (!canvas) return
+
             let endIdx = 0
 
             for (let i = history.length - 2; i > 0; i--) {
@@ -185,6 +184,8 @@ export default function MyCanvas(props: Props) {
         document.addEventListener("wheel", changeBrushSize)
 
         window.addEventListener("resize", function() {
+            if (!canvas) return
+
             const canvasRect = canvas.getBoundingClientRect()
 
             setPageOffset([canvasRect.x, canvasRect.y])

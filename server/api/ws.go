@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
 
@@ -19,38 +20,52 @@ type ConnectionInfo struct {
 	Color types.Color
 }
 
-type Connections = map[*websocket.Conn]ConnectionInfo
+type RoomConnections = map[*websocket.Conn]ConnectionInfo
 
-var connections = Connections{}
+type AllConnections = map[string]RoomConnections
 
-func GetConnections() Connections {
-    return connections 
+var connections = AllConnections{}
+
+func GetConnections(roomId string) RoomConnections {
+	return connections[roomId]
 }
 
-func GetConnection(conn *websocket.Conn) (ConnectionInfo, bool) {
-    info, isExist := GetConnections()[conn]
+func GetConnection(roomId string, conn *websocket.Conn) (ConnectionInfo, bool) {
+	info, isExist := GetConnections(roomId)[conn]
 
-    return info, isExist
+	return info, isExist
 }
 
-func AddConnection(conn *websocket.Conn, info ConnectionInfo) {
-    connections = GetConnections()
-
-    connections[conn] = info
+func CreateConnectionsRoom(roomId string) {
+	connections[roomId] = RoomConnections{}
 }
 
-func RemoveConnection(conn *websocket.Conn) {
-    delete(GetConnections(), conn)
+func RemoveConnectionsRoom(roomId string) {
+	delete(connections, roomId)
 }
 
-func writeError(conn *websocket.Conn, code int, msg string) {
+func AddConnection(roomId string, conn *websocket.Conn, info ConnectionInfo) {
+	connections := GetConnections(roomId)
+
+	connections[conn] = info
+}
+
+func RemoveConnection(roomId string, conn *websocket.Conn) {
+	delete(GetConnections(roomId), conn)
+}
+
+func sendWSError(conn *websocket.Conn, code int, msg string) {
 	jsonStr := fmt.Sprintf("{\"error\": \"%s\"", msg)
 
 	conn.WriteMessage(code, []byte(jsonStr))
 }
 
-func broadcast(conn *websocket.Conn, outcoming *types.OutcomingMessage) {
-	for anotherConn := range GetConnections() {
+func logWSError(action string, err error) {
+	log.Println(fmt.Sprintf("[websoketHandler] Error while %s: ", action), err)
+}
+
+func broadcast(roomId string, conn *websocket.Conn, outcoming *types.OutcomingMessage) {
+	for anotherConn := range GetConnections(roomId) {
 		if conn == anotherConn {
 			continue
 		}
@@ -58,7 +73,7 @@ func broadcast(conn *websocket.Conn, outcoming *types.OutcomingMessage) {
 		stringified, err := json.Marshal(outcoming)
 
 		if err != nil {
-            log.Print(err)
+			log.Print(err)
 			return
 		}
 
@@ -75,29 +90,36 @@ var upgrader = websocket.Upgrader{
 }
 
 func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
-	nameParam := r.URL.Query().Get("name")
+	roomId := chi.URLParam(r, "roomId")
+	myName := r.URL.Query().Get("name")
 
-	if nameParam == "" {
+	ctx := context.Background()
+
+	isRoomExist, err := storage.Redis.Exists(ctx, roomId).Result()
+
+	if isRoomExist == 0 || err != nil {
 		return
 	}
 
-	for _, connInfo := range GetConnections() {
-		if connInfo.Name == nameParam {
-			return
-		}
+	if myName == "" {
+		return
 	}
 
-    ctx := context.Background()
+    for _, connInfo := range GetConnections(roomId) {
+        if connInfo.Name == myName {
+            return
+        }
+    }
 
 	respHeader := http.Header{}
 
-	color := types.Color{
+	myColor := types.Color{
 		Red:   byte(rand.Uint32()),
 		Green: byte(rand.Uint32()),
 		Blue:  byte(rand.Uint32()),
 	}
 
-	respHeader.Add("X-Color", color.GetHex())
+	respHeader.Add("X-Color", myColor.GetHex())
 
 	conn, err := upgrader.Upgrade(w, r, respHeader)
 
@@ -106,128 +128,126 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-    key := fmt.Sprintf("$.%s", nameParam)
+	key := fmt.Sprintf("$.%s", myName)
 
 	defer func() {
-        RemoveConnection(conn)
+		RemoveConnection(roomId, conn)
 
-		outcomingUnregNotify := types.OutcomingMessage{
-			Initiator: nameParam,
-			Message: types.IncomingMessage{
-				Cmd:     "unreg",
-				Payload: "",
-			},
+		if len(GetConnections(roomId)) == 0 {
+			storage.Redis.JSONDel(ctx, roomId, fmt.Sprintf("$"))
+			RemoveConnectionsRoom(roomId)
+		} else {
+			outcomingUnregNotify := types.OutcomingMessage{
+				Initiator: myName,
+				Message: types.IncomingMessage{
+					Cmd:     "unreg",
+					Payload: "",
+				},
+			}
+
+			broadcast(roomId, conn, &outcomingUnregNotify)
+
+			storage.Redis.JSONDel(ctx, roomId, fmt.Sprintf("$.draws.%s", myName))
+			storage.Redis.JSONDel(ctx, roomId, fmt.Sprintf("$.lastPositions.%s", myName))
 		}
-
-        storage.Redis.JSONDel(ctx, "draws", key)
-        storage.Redis.JSONDel(ctx, "lastPositions", key)
-
-		broadcast(conn, &outcomingUnregNotify)
 
 		conn.Close()
 	}()
 
-    storage.Redis.JSONSet(ctx, "draws", key, "[]").Val()
+	storage.Redis.JSONSet(ctx, roomId, fmt.Sprintf("$.draws.%s", myName), "[]").Val()
 
-    connInfo := ConnectionInfo{
-		Name:  nameParam,
-		Color: color,
+	connInfo := ConnectionInfo{
+		Name:  myName,
+		Color: myColor,
 	}
 
-	AddConnection(conn, connInfo)
+	AddConnection(roomId, conn, connInfo)
 
 	outcomingRegNotify := types.OutcomingMessage{
-		Initiator: nameParam,
+		Initiator: myName,
 		Message: types.IncomingMessage{
 			Cmd:     "reg",
-			Payload: color.GetHex(),
+			Payload: myColor.GetHex(),
 		},
 	}
 
-	broadcast(conn, &outcomingRegNotify)
+	broadcast(roomId, conn, &outcomingRegNotify)
 
 	for {
 		_, message, err := conn.ReadMessage()
 
 		if err != nil {
-			log.Println(message, err)
+			logWSError("reading incoming message", err)
 			break
 		}
 
-		var parsedMessage types.IncomingMessage
+		var incomingMsg types.IncomingMessage
 
-		parseErr := json.Unmarshal(message, &parsedMessage)
+		err = json.Unmarshal(message, &incomingMsg)
 
-		if parseErr != nil {
-			log.Println(parseErr)
+		if err != nil {
+			logWSError("parsing incoming message", err)
 			break
 		}
 
-		myConnInfo, isRegistered := GetConnection(conn)
-
-		if !isRegistered {
-			writeError(conn, 404, "Can't find you :(")
-			continue
+		outcomingMsg := types.OutcomingMessage{
+			Initiator: myName,
+			Message:   incomingMsg,
 		}
 
-		outcoming := types.OutcomingMessage{
-			Initiator: myConnInfo.Name,
-			Message:   parsedMessage,
-		}
-
-		if parsedMessage.Cmd == "line" || parsedMessage.Cmd == "end-line" || parsedMessage.Cmd == "move" {
-            err := storage.Redis.JSONSet(ctx, "lastPositions", key, message).Err()
+		if incomingMsg.Cmd == "line" || incomingMsg.Cmd == "end-line" || incomingMsg.Cmd == "move" {
+			err := storage.Redis.JSONSet(ctx, roomId, fmt.Sprintf("$.lastPositions.%s", myName), message).Err()
 
 			if err != nil {
-				log.Print(err)
+				logWSError("setting last position", err)
 				break
 			}
 		}
 
-		if parsedMessage.Cmd == "line" || parsedMessage.Cmd == "end-line" {
-            err := storage.Redis.JSONArrAppend(ctx, "draws", key, message).Err()
+		if incomingMsg.Cmd == "line" || incomingMsg.Cmd == "end-line" {
+			err := storage.Redis.JSONArrAppend(ctx, roomId, fmt.Sprintf("$.draws.%s", myName), message).Err()
 
 			if err != nil {
-				log.Print(err)
+				logWSError("adding draw", err)
 				break
 			}
 		}
 
-		if parsedMessage.Cmd == "undo" {
-			eraseUntil, err := strconv.Atoi(parsedMessage.Payload)
+		if incomingMsg.Cmd == "undo" {
+			eraseUntil, err := strconv.Atoi(incomingMsg.Payload)
 
 			if err != nil {
-				log.Print(err)
+				logWSError("parsing undo index", err)
 				break
 			}
 
-			myDrawsStringified, err := storage.Redis.JSONGet(ctx, "draws", key).Result()
+			myDrawsStringified, err := storage.Redis.JSONGet(ctx, roomId, fmt.Sprintf("$.draws.%s", myName), key).Result()
 
 			if err != nil {
-				log.Print(err)
+				logWSError("getting undo user draws", err)
 				break
 			}
 
-            myDrawsStringified = myDrawsStringified[1:len(myDrawsStringified)-1]
+			myDrawsStringified = myDrawsStringified[1 : len(myDrawsStringified)-1]
 
-            var myDraws []types.IncomingMessage
+			var myDraws []types.IncomingMessage
 
-            parseErr := json.Unmarshal([]byte(myDrawsStringified), &myDraws)
+			err = json.Unmarshal([]byte(myDrawsStringified), &myDraws)
 
-			if parseErr != nil {
-				log.Print(err)
+			if err != nil {
+				logWSError("parsing undo draws", err)
 				break
 			}
 
 			undoneDraws := myDraws[0:eraseUntil]
 
-            storage.Redis.JSONSet(ctx, "draws", key, undoneDraws)
+			storage.Redis.JSONSet(ctx, roomId, fmt.Sprintf("$.draws.%s", myName), undoneDraws)
 
 			bytes, err := json.Marshal(undoneDraws)
 
-			outcoming.Message.Payload = string(bytes)
+			outcomingMsg.Message.Payload = string(bytes)
 		}
 
-		broadcast(conn, &outcoming)
+		broadcast(roomId, conn, &outcomingMsg)
 	}
 }

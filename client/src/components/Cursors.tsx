@@ -1,7 +1,6 @@
 import { For, createEffect, createResource, createSignal, on } from "solid-js";
 import { useAppContext } from "../App";
-import { CMDS, Coords, WSMessage } from "../definitions";
-import * as api from "../api.ts"
+import { CMDS, WSMessage } from "../definitions";
 import Cursor from "./Cursor.tsx";
 import { pageOffsetSignal } from "./MyCanvas.tsx";
 import { scrollOffsetSignal } from "./Canvases.tsx";
@@ -11,18 +10,15 @@ interface Props {
 }
 
 export default function Cursors(props: Props) {
-    const { wsClient, me } = useAppContext()
+    const { wsClient, restClient } = useAppContext()
 
     const [getPageOffset] = pageOffsetSignal
     const [getScrollOffset] = scrollOffsetSignal
 
-    const [lastPositions, { mutate: setLastPositions }] = createResource(
-        () => api.getLastPositions(me.name),
-        {
+    const [lastPositions, { mutate: setLastPositions }] = createResource(() => restClient.getLastPositions(), {
             initialValue: {},
             storage: (val) => createSignal(val, { equals: false })
-        }
-    )
+    })
 
     createEffect(on(() => props.users, (users) => {
         setLastPositions((lastPositions) => {
