@@ -109,10 +109,35 @@ body {
 }
 
 .controls {
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     position: fixed;
     bottom: 0;
-    width: 100%;
-    left: 0;
+    gap: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.controls__size {
+    display: flex;
+    flex-direction: column;
+}
+
+.controls__size label {
+    font-size: 14px;
+}
+
+.controls__size input {
+    font-size: 12px;
+    width: 30px;
+}
+
+.controls__undo, .controls__redo{
+    font-size: 20px;
+    width: 30px;
+    height: 30px;
 }
 
 .controls__undo {

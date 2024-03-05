@@ -6,7 +6,8 @@ export const CMDS = {
     REG: "reg",
     UNREG: "unreg",
     MOVE: "move",
-    UNDO: "undo"
+    UNDO: "undo",
+    REDO: "redo"
 } as const
 
 export type Command = (typeof CMDS)[keyof typeof CMDS]

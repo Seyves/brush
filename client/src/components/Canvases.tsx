@@ -50,18 +50,18 @@ export default function Canvases(props: Comp) {
     onMount(() => {
         for (const user in props.existingDraws) {
             for (const message of props.existingDraws[user]) {
-                handleDraw(user, message)
+                handleDraw(user, message, true)
             }
         }
 
         wsClient.connection.addEventListener("message", function(unparsed) {
             const parsed = JSON.parse(unparsed.data)
 
-            handleDraw(parsed.initiator, parsed.message)
+            handleDraw(parsed.initiator, parsed.message, false)
         })
     })
 
-    function handleDraw(user: string, message: WSMessage) {
+    function handleDraw(user: string, message: WSMessage, isInstant: boolean) {
         const ctx = contexts[user]
 
         switch (message.cmd) {
@@ -70,12 +70,22 @@ export default function Canvases(props: Comp) {
 
                 const [x, y] = pos.split(";").map(Number)
 
-                drawAPI.createLinePart(
-                    ctx,
-                    [+x * pixelRatio, +y * pixelRatio],
-                    +size * pixelRatio,
-                    props.users[user]
-                )
+                if (isInstant) {
+                    console.log("opti")
+                    drawAPI.createLinePart(
+                        ctx,
+                        [+x * pixelRatio, +y * pixelRatio],
+                        +size * pixelRatio,
+                        props.users[user]
+                    )
+                } else {
+                    drawAPI.createLinePartLive(
+                        ctx,
+                        [+x * pixelRatio, +y * pixelRatio],
+                        +size * pixelRatio,
+                        props.users[user]
+                    )
+                }
 
                 break
             }
@@ -92,7 +102,16 @@ export default function Canvases(props: Comp) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height)
 
                 for (const msg of parsedMsgs) {
-                    handleDraw(user, msg)
+                    handleDraw(user, msg, true)
+                }
+
+                break
+            }
+            case CMDS.REDO: {
+                const parsedMsgs = JSON.parse(message.payload) as WSMessage[]
+
+                for (const msg of parsedMsgs) {
+                    handleDraw(user, msg, true)
                 }
 
                 break

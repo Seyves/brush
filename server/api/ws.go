@@ -246,6 +246,42 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 			outcomingMsg.Message.Payload = string(bytes)
 		}
 
+		if incomingMsg.Cmd == "redo" {
+			myDrawsStringified, err := storage.Redis.JSONGet(ctx, roomId, fmt.Sprintf("$.draws.%s", myName)).Result()
+
+			if err != nil {
+				logWSError("getting redo user draws", err)
+				break
+			}
+
+			myDrawsStringified = myDrawsStringified[1 : len(myDrawsStringified)-1]
+
+			var myDraws []types.IncomingMessage
+			var myNewDraws[]types.IncomingMessage
+
+			err = json.Unmarshal([]byte(myDrawsStringified), &myDraws)
+
+			if err != nil {
+				logWSError("parsing redo db draws", err)
+				break
+			}
+
+			err = json.Unmarshal([]byte(incomingMsg.Payload), &myNewDraws)
+
+			if err != nil {
+				logWSError("parsing redo incoming draws", err)
+				break
+			}
+
+            myDraws = append(myDraws, myNewDraws...)
+            
+			storage.Redis.JSONSet(ctx, roomId, fmt.Sprintf("$.draws.%s", myName), myDraws)
+
+			bytes, err := json.Marshal(myNewDraws)
+
+			outcomingMsg.Message.Payload = string(bytes)
+        }
+
 		broadcast(roomId, conn, &outcomingMsg)
 	}
 }

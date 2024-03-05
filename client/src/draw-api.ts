@@ -1,5 +1,15 @@
 import { Coords } from "./definitions"
 
+export function createLinePartLive(
+    ctx: CanvasRenderingContext2D,
+    coords: Coords,
+    size: number,
+    color: string
+) {
+    createLinePart(ctx, coords, size, color)
+    ctx.stroke()
+}
+
 export function createLinePart(
     ctx: CanvasRenderingContext2D,
     [x, y]: Coords,
@@ -12,7 +22,6 @@ export function createLinePart(
     ctx.strokeStyle = color
 
     ctx.lineTo(x, y)
-    ctx.stroke()
 }
 
 export function createEndLine (ctx: CanvasRenderingContext2D) {

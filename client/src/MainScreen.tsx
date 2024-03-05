@@ -69,7 +69,6 @@ export default function MainScreen() {
                 <Show when={loader()} fallback={<p>Something went wrong</p>}>
                     {(loaded) =>
                         <>
-                            <div class="room-id">room id: {restClient.roomId}</div>
                             <Canvases users={loaded().users} existingDraws={loaded().existingDraws} brushSize={brushSize()}/>
                             <Cursors users={loaded().users} />
                             <Controls brushSize={brushSize()} setBrushSize={setBrushSize}/>

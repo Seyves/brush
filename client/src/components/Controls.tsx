@@ -48,19 +48,26 @@ export default function Controls(props: Props) {
         if (event.ctrlKey && event.key === "z") undo()
     })
 
+    window.addEventListener("keydown", function(event: KeyboardEvent) {
+        if (event.ctrlKey && event.key === "y") redo()
+    })
+
     return (
         <div
             class="controls"
         >
-            <input class="controls__size" value={props.brushSize} onInput={(event) => {
-                const value = event.currentTarget.value
+            <div class="controls__size">
+                <label for="size-control">Brush size: </label>
+                <input id="size-control" value={props.brushSize} onInput={(event) => {
+                    const value = event.currentTarget.value
 
-                if (!/^\d+$/.test(value)) {
-                    event.currentTarget.value = props.brushSize.toString()
-                } else {
-                    props.setBrushSize(parseInt(value))
-                }
-            }} />
+                    if (!/^\d+$/.test(value)) {
+                        event.currentTarget.value = props.brushSize.toString()
+                    } else {
+                        props.setBrushSize(parseInt(value))
+                    }
+                }} />
+            </div>
             <button class="controls__undo" onClick={undo} >⟳</button>
             <button class="controls__redo" onClick={redo} >⟳</button>
         </div>

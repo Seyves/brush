@@ -48,7 +48,7 @@ export default function MyCanvas(props: Props) {
             size: number,
             ratio: number
         ) {
-            drawAPI.createLinePart(ctx, [x * ratio, y * ratio], size, me.color)
+            drawAPI.createLinePartLive(ctx, [x * ratio, y * ratio], size, me.color)
 
             const msg = {
                 cmd: CMDS.LINE,
@@ -123,8 +123,6 @@ export default function MyCanvas(props: Props) {
 
             if (history.cursor === -1) return history.cursor
 
-            const isUndo = prevCursor === -1 || prevCursor > history.cursor
-
             ctx.clearRect(0, 0, canvas.width, canvas.height)
 
             for (let i = 0; i <= history.cursor; i++) {
@@ -142,34 +140,29 @@ export default function MyCanvas(props: Props) {
                             me.color
                         )
 
-                        if (!isUndo && i > prevCursor) {
-                            wsClient.send({
-                                cmd: CMDS.LINE,
-                                payload: `${size},${x};${y}`
-                            })
-                        }
-
                         break
                     }
                     case CMDS.ENDLINE: {
                         drawAPI.createEndLine(ctx)
-
-                        if (!isUndo && i > prevCursor) {
-                            wsClient.send({
-                                cmd: CMDS.ENDLINE,
-                                payload: ``
-                            })
-                        }
 
                         break
                     }
                 }
             }
 
+            const isUndo = prevCursor === -1 || prevCursor > history.cursor
+
             if (isUndo) {
                 const msg = {
                     cmd: CMDS.UNDO,
                     payload: (history.cursor + 1).toString()
+                }
+
+                wsClient.send(msg)
+            } else {
+                const msg = {
+                    cmd: CMDS.REDO,
+                    payload: JSON.stringify(history.items.slice(prevCursor + 1, history.cursor + 1))
                 }
 
                 wsClient.send(msg)
