@@ -1,12 +1,18 @@
-import { createEffect, createSignal, on, onMount}  from "solid-js";
+import { createEffect, createSignal, on, onMount } from "solid-js";
 import { useAppContext } from "../App";
-import { CMDS, Coords, WSMessage } from "../definitions";
+import { CMDS, Coords } from "../definitions";
 import { createThrottler } from "../utils";
 import { scrollOffsetSignal } from "./Canvases";
+import { historyStore } from "../MainScreen";
+import * as drawAPI from "../draw-api.ts"
 
 export const pageOffsetSignal = createSignal<Coords>([0, 0])
 
-export default function MyCanvas() {
+interface Props {
+    brushSize: number
+}
+
+export default function MyCanvas(props: Props) {
     const {
         wsClient,
         me
@@ -15,12 +21,11 @@ export default function MyCanvas() {
     const [getPageOffset, setPageOffset] = pageOffsetSignal
     const [getScrollOffset] = scrollOffsetSignal
     const [isDrawing, setIsDrawing] = createSignal(false)
-    const [brushSize, setBrushSize] = createSignal(20)
     const [position, setPosition] = createSignal<Coords>([0, 0])
+    const [history, setHistory] = historyStore
 
     let canvas: HTMLCanvasElement | undefined
     let pixelRatio = window.devicePixelRatio
-    let history: WSMessage[] = []
 
     onMount(() => {
         if (!canvas) return
@@ -43,34 +48,40 @@ export default function MyCanvas() {
             size: number,
             ratio: number
         ) {
-            ctx.lineWidth = size
-            ctx.lineJoin = "round"
-            ctx.lineCap = "round"
-            ctx.strokeStyle = me.color
-
-            ctx.lineTo(x * ratio, y * ratio)
-            ctx.stroke()
+            drawAPI.createLinePart(ctx, [x * ratio, y * ratio], size, me.color)
 
             const msg = {
                 cmd: CMDS.LINE,
                 payload: `${size / ratio},${x};${y}`
             }
 
-            history.push(msg)
+            setHistory((prev) => {
+                if (prev.cursor !== -1) {
+                    return {
+                        cursor: -1,
+                        items: [...prev.items.slice(0, prev.cursor + 1), msg]
+                    }
+                }
+
+                prev.items.push(msg)
+                return { ...prev, cursor: -1 }
+            })
 
             wsClient.send(msg)
         }, 20)
 
-        const endLine = function() {
-            ctx.stroke()
-            ctx.beginPath()
+        const drawEndLine = function() {
+            drawAPI.createEndLine(ctx)
 
             const msg = {
                 cmd: CMDS.ENDLINE,
                 payload: ``
             }
 
-            history.push(msg)
+            setHistory((prev) => {
+                prev.items.push(msg)
+                return { ...prev, cursor: -1 }
+            })
 
             wsClient.send(msg)
         }
@@ -93,69 +104,79 @@ export default function MyCanvas() {
             ] as const
 
             if (isDrawing()) {
-                drawLinePart(offsetCoords, brushSize(), pixelRatio)
+                drawLinePart(offsetCoords, props.brushSize, pixelRatio)
             } else {
                 sendMove(offsetCoords)
             }
         }))
 
         createEffect((prevIsDrawing) => {
-            if (prevIsDrawing && !isDrawing()) endLine()
+            if (prevIsDrawing && !isDrawing()) drawEndLine()
 
             return isDrawing()
         }, false)
 
-        createEffect(on(getScrollOffset, endLine))
+        createEffect(on(getScrollOffset, drawEndLine))
 
-        const undo = function() {
-            if (!canvas) return
+        createEffect((prevCursor: number) => {
+            if (!canvas) return history.cursor
 
-            let endIdx = 0
+            if (history.cursor === -1) return history.cursor
 
-            for (let i = history.length - 2; i > 0; i--) {
-                if (history[i].cmd !== CMDS.ENDLINE) continue
-
-                endIdx = i
-                break
-            }
+            const isUndo = prevCursor === -1 || prevCursor > history.cursor
 
             ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-            for (let i = 0; i <= endIdx; i++) {
-                const msg = history[i]
+            for (let i = 0; i <= history.cursor; i++) {
+                const msg = history.items[i]
 
                 switch (msg.cmd) {
                     case CMDS.LINE: {
                         const [size, pos] = msg.payload.split(",")
                         const [x, y] = pos.split(";")
 
-                        ctx.lineWidth = +size * pixelRatio
-                        ctx.lineJoin = "round"
-                        ctx.lineCap = "round"
-                        ctx.strokeStyle = me.color
+                        drawAPI.createLinePart(
+                            ctx,
+                            [+x * pixelRatio, +y * pixelRatio],
+                            +size * pixelRatio,
+                            me.color
+                        )
 
-                        ctx.lineTo(+x * pixelRatio, +y * pixelRatio)
-                        ctx.stroke()
+                        if (!isUndo && i > prevCursor) {
+                            wsClient.send({
+                                cmd: CMDS.LINE,
+                                payload: `${size},${x};${y}`
+                            })
+                        }
+
                         break
                     }
                     case CMDS.ENDLINE: {
-                        ctx.stroke()
-                        ctx.beginPath()
+                        drawAPI.createEndLine(ctx)
+
+                        if (!isUndo && i > prevCursor) {
+                            wsClient.send({
+                                cmd: CMDS.ENDLINE,
+                                payload: ``
+                            })
+                        }
 
                         break
                     }
                 }
             }
 
-            history = history.slice(0, endIdx + 1)
+            if (isUndo) {
+                const msg = {
+                    cmd: CMDS.UNDO,
+                    payload: (history.cursor + 1).toString()
+                }
 
-            const msg = {
-                cmd: CMDS.UNDO,
-                payload: (endIdx + 1).toString()
+                wsClient.send(msg)
             }
 
-            wsClient.send(msg)
-        }
+            return history.cursor
+        }, -1)
 
         function onPointerMove(event: PointerEvent) {
             if (event.target !== canvas) return
@@ -163,25 +184,19 @@ export default function MyCanvas() {
             setPosition([event.pageX, event.pageY])
         }
 
-        document.addEventListener("pointermove", onPointerMove)
+        canvas.addEventListener("pointermove", onPointerMove)
 
         function onPointerDown() {
             setIsDrawing(true)
+            document.addEventListener("pointerup", onPointerUp)
         }
 
-        document.addEventListener("pointerdown", onPointerDown)
+        canvas.addEventListener("pointerdown", onPointerDown)
 
         function onPointerUp() {
             setIsDrawing(false)
+            document.removeEventListener("pointerup", onPointerUp)
         }
-
-        document.addEventListener("pointerup", onPointerUp)
-
-        function changeBrushSize(event: WheelEvent) {
-            setBrushSize((prev) => prev + Math.round(event.deltaY / 50))
-        }
-
-        document.addEventListener("wheel", changeBrushSize)
 
         window.addEventListener("resize", function() {
             if (!canvas) return
@@ -194,16 +209,12 @@ export default function MyCanvas() {
             //canvas.width = 1920 * pixelRatio
             //canvas.height = 1080 * pixelRatio
 
-            endLine()
+            drawEndLine()
         }, false)
-
-        window.addEventListener("keydown", function(event: KeyboardEvent) {
-            if (event.key === "ArrowLeft") undo()
-        })
     })
 
     function getBrushStyles() {
-        const size = brushSize()
+        const size = props.brushSize
         const [x, y] = position()
         return {
             width: `${size} px`,

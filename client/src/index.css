@@ -12,14 +12,12 @@
 }
 
 body {
-    color: white;
     font-size: 24px;
     margin: 0;
     width: 100svw;
     height: 100svh;
     overflow: hidden;
     font-family: Manolo;
-    background-color: black;
 }
 
 #root {
@@ -92,7 +90,6 @@ body {
 }
 
 #canvases {
-    background-color: #1c1c25;
     position: relative;
     width: 1920px;
     overflow: hidden;
@@ -111,3 +108,13 @@ body {
     position: relative;
 }
 
+.controls {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    left: 0;
+}
+
+.controls__undo {
+    transform: scaleX(-1);
+}

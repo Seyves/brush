@@ -128,8 +128,6 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := fmt.Sprintf("$.%s", myName)
-
 	defer func() {
 		RemoveConnection(roomId, conn)
 
@@ -221,7 +219,7 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 
-			myDrawsStringified, err := storage.Redis.JSONGet(ctx, roomId, fmt.Sprintf("$.draws.%s", myName), key).Result()
+			myDrawsStringified, err := storage.Redis.JSONGet(ctx, roomId, fmt.Sprintf("$.draws.%s", myName)).Result()
 
 			if err != nil {
 				logWSError("getting undo user draws", err)

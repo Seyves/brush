@@ -1,16 +1,18 @@
 import { For, createEffect, createSignal, onMount } from "solid-js"
+import * as drawAPI from "../draw-api.ts"
 import { CMDS, Coords, WSMessage } from "../definitions"
 import { useAppContext } from "../App.tsx"
 import MyCanvas from "./MyCanvas.tsx"
 
-interface Props {
+interface Comp {
     users: Record<string, string>
+    brushSize: number
     existingDraws: Record<string, WSMessage[]>
 }
 
 export const scrollOffsetSignal = createSignal<Coords>([0, 0])
 
-export default function Canvases(props: Props) {
+export default function Canvases(props: Comp) {
     const { wsClient } = useAppContext()
 
     const [_, setScrollOffset] = scrollOffsetSignal
@@ -60,36 +62,30 @@ export default function Canvases(props: Props) {
     })
 
     function handleDraw(user: string, message: WSMessage) {
+        const ctx = contexts[user]
+
         switch (message.cmd) {
             case CMDS.LINE: {
-                const ctx = contexts[user]
-
                 const [size, pos] = message.payload.split(",")
 
                 const [x, y] = pos.split(";").map(Number)
 
-                ctx.lineJoin = "round"
-                ctx.lineCap = "round"
-                ctx.lineWidth = +size * pixelRatio
-
-                ctx.strokeStyle = props.users[user]
-
-                ctx.lineTo(x * pixelRatio, y * pixelRatio)
-                ctx.stroke()
+                drawAPI.createLinePart(
+                    ctx,
+                    [+x * pixelRatio, +y * pixelRatio],
+                    +size * pixelRatio,
+                    props.users[user]
+                )
 
                 break
             }
             case CMDS.ENDLINE: {
-                const ctx = contexts[user]
-
-                ctx.stroke()
-                ctx.beginPath()
+                drawAPI.createEndLine(ctx)
 
                 break
             }
             case CMDS.UNDO: {
                 const canvas = canvases[user]
-                const ctx = contexts[user]
 
                 const parsedMsgs = JSON.parse(message.payload) as WSMessage[]
 
@@ -114,7 +110,7 @@ export default function Canvases(props: Props) {
                 <For each={Object.keys(props.users)}>{(user) => {
                     return <canvas class="canvas" ref={canvases[user]}></canvas>
                 }}</For>
-                <MyCanvas />
+                <MyCanvas brushSize={props.brushSize} />
             </div>
         </div >
     )

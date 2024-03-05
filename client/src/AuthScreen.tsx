@@ -33,6 +33,8 @@ export default function AuthScreen(props: Props) {
     async function createRoom(name: string) {
         const roomId = await api.createRoom()
 
+        console.log(roomId)
+
         enterRoom(roomId, name)
     }
 
