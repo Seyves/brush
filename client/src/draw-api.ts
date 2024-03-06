@@ -24,7 +24,7 @@ export function createLinePart(
     ctx.lineTo(x, y)
 }
 
-export function createEndLine (ctx: CanvasRenderingContext2D) {
+export function createLineEnd (ctx: CanvasRenderingContext2D) {
     ctx.stroke()
     ctx.beginPath()
 }

@@ -4,15 +4,9 @@ import Canvases from "./components/Canvases.tsx"
 import { useAppContext } from "./App.tsx"
 import Cursors from "./components/Cursors.tsx"
 import Controls from "./components/Controls.tsx"
-import { createStore } from "solid-js/store"
 
-export const historyStore = createStore<{
-    items: WSMessage[]
-    cursor: number
-}>({
-    items: [],
-    cursor: 0
-})
+export const historySignal = createSignal<WSMessage[]>([])
+export const historyCursorSignal = createSignal(-1)
 
 export default function MainScreen() {
     const { wsClient, restClient } = useAppContext()

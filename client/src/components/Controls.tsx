@@ -1,5 +1,5 @@
 import { Setter } from "solid-js"
-import { historyStore } from "../MainScreen"
+import { historySignal, historyCursorSignal } from "../MainScreen"
 import { CMDS } from "../definitions"
 
 interface Props {
@@ -8,39 +8,44 @@ interface Props {
 }
 
 export default function Controls(props: Props) {
-    const [_, setHistory] = historyStore
+    const [_, setHistoryCursor] = historyCursorSignal
+    const [getHistory] = historySignal
 
     function undo() {
-        setHistory(prev => {
+        setHistoryCursor(prev => {
+            const history = getHistory()
+
             let endIdx = 0
 
-            const start = prev.cursor === -1 ? prev.items.length - 1 : prev.cursor
+            const start = prev === -1 ? history.length - 1 : prev
 
             for (let i = start - 1; i > 0; i--) {
-                if (prev.items[i].cmd !== CMDS.ENDLINE) continue
+                if (history[i].cmd !== CMDS.ENDLINE) continue
 
                 endIdx = i
                 break
             }
 
-            return { ...prev, cursor: endIdx }
+            return endIdx 
         })
     }
 
     function redo() {
-        setHistory(prev => {
-            if (prev.cursor === -1) return prev
+        setHistoryCursor(prev => {
+            if (prev === -1) return prev
 
-            let endIdx = prev.cursor
+            const history = getHistory()
 
-            for (let i = prev.cursor + 1; i < prev.items.length; i++) {
-                if (prev.items[i].cmd !== CMDS.ENDLINE) continue
+            let endIdx = prev
+
+            for (let i = prev + 1; i < history.length; i++) {
+                if (history[i].cmd !== CMDS.ENDLINE) continue
 
                 endIdx = i
                 break
             }
 
-            return { ...prev, cursor: endIdx }
+            return endIdx
         })
     }
 
@@ -58,7 +63,7 @@ export default function Controls(props: Props) {
         >
             <div class="controls__size">
                 <label for="size-control">Brush size: </label>
-                <input id="size-control" value={props.brushSize} onInput={(event) => {
+                <input id="size-control" class="input" value={props.brushSize} onInput={(event) => {
                     const value = event.currentTarget.value
 
                     if (!/^\d+$/.test(value)) {
@@ -68,8 +73,8 @@ export default function Controls(props: Props) {
                     }
                 }} />
             </div>
-            <button class="controls__undo" onClick={undo} >⟳</button>
-            <button class="controls__redo" onClick={redo} >⟳</button>
+            <button class="controls__undo button" onClick={undo} >⟳</button>
+            <button class="controls__redo button" onClick={redo} >⟳</button>
         </div>
     )
 }

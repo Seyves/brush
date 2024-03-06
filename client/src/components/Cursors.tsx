@@ -66,8 +66,8 @@ export default function Cursors(props: Props) {
                     const [x, y] = pos.split(";").map(Number)
 
                     return [
-                        Math.round(x + pageOffsetX + scrollOffsetX),
-                        Math.round(y + pageOffsetY + scrollOffsetY)
+                        Math.round(x + pageOffsetX - scrollOffsetX),
+                        Math.round(y + pageOffsetY - scrollOffsetY)
                     ] as const
                 }
 

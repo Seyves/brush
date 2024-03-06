@@ -3,7 +3,7 @@ import { useAppContext } from "../App";
 import { CMDS, Coords } from "../definitions";
 import { createThrottler } from "../utils";
 import { scrollOffsetSignal } from "./Canvases";
-import { historyStore } from "../MainScreen";
+import { historyCursorSignal, historySignal } from "../MainScreen";
 import * as drawAPI from "../draw-api.ts"
 
 export const pageOffsetSignal = createSignal<Coords>([0, 0])
@@ -18,11 +18,13 @@ export default function MyCanvas(props: Props) {
         me
     } = useAppContext()
 
+    const [getIsDrawing, setIsDrawing] = createSignal(false)
+    const [getPosition, setPosition] = createSignal<Coords>([0, 0])
+
     const [getPageOffset, setPageOffset] = pageOffsetSignal
-    const [getScrollOffset] = scrollOffsetSignal
-    const [isDrawing, setIsDrawing] = createSignal(false)
-    const [position, setPosition] = createSignal<Coords>([0, 0])
-    const [history, setHistory] = historyStore
+    const [getScrollOffset, setScrollOffset] = scrollOffsetSignal
+    const [getHistoryCursor, setHistoryCursor] = historyCursorSignal
+    const [getHistory, setHistory] = historySignal
 
     let canvas: HTMLCanvasElement | undefined
     let pixelRatio = window.devicePixelRatio
@@ -41,37 +43,10 @@ export default function MyCanvas(props: Props) {
 
         const canvasRect = canvas.getBoundingClientRect()
 
-        setPageOffset([canvasRect.x, canvasRect.y])
-
-        const drawLinePart = createThrottler(function(
-            [x, y]: Coords,
-            size: number,
-            ratio: number
-        ) {
-            drawAPI.createLinePartLive(ctx, [x * ratio, y * ratio], size, me.color)
-
-            const msg = {
-                cmd: CMDS.LINE,
-                payload: `${size / ratio},${x};${y}`
-            }
-
-            setHistory((prev) => {
-                if (prev.cursor !== -1) {
-                    return {
-                        cursor: -1,
-                        items: [...prev.items.slice(0, prev.cursor + 1), msg]
-                    }
-                }
-
-                prev.items.push(msg)
-                return { ...prev, cursor: -1 }
-            })
-
-            wsClient.send(msg)
-        }, 20)
+        setPageOffset([Math.max(canvasRect.x, 0), Math.max(canvasRect.y, 0)])
 
         const drawEndLine = function() {
-            drawAPI.createEndLine(ctx)
+            drawAPI.createLineEnd(ctx)
 
             const msg = {
                 cmd: CMDS.ENDLINE,
@@ -79,8 +54,9 @@ export default function MyCanvas(props: Props) {
             }
 
             setHistory((prev) => {
-                prev.items.push(msg)
-                return { ...prev, cursor: -1 }
+                prev.push(msg)
+
+                return prev
             })
 
             wsClient.send(msg)
@@ -91,42 +67,112 @@ export default function MyCanvas(props: Props) {
                 cmd: CMDS.MOVE,
                 payload: coords.join(";")
             })
-        }, 70)
+        }, 50)
 
-        createEffect(on(position, () => {
+        createEffect(on(getPosition, () => {
+            if (getIsDrawing()) return
+
             const [pageOffsetX, pageOffsetY] = getPageOffset()
             const [scrollOffsetX, scrollOffsetY] = getScrollOffset()
-            const [x, y] = position()
+            const [x, y] = getPosition()
 
             const offsetCoords = [
                 Math.round(x - pageOffsetX + scrollOffsetX),
                 Math.round(y - pageOffsetY + scrollOffsetY)
             ] as const
 
-            if (isDrawing()) {
-                drawLinePart(offsetCoords, props.brushSize, pixelRatio)
-            } else {
-                sendMove(offsetCoords)
-            }
+            sendMove(offsetCoords)
         }))
 
-        createEffect((prevIsDrawing) => {
-            if (prevIsDrawing && !isDrawing()) drawEndLine()
+        const drawLinePart = function() {
+            let prevPos: Coords = [0, 0]
+            let throttleTime = performance.now()
 
-            return isDrawing()
+            return function(
+                [x, y]: Coords,
+                ratio: number,
+                size: number
+            ) {
+                const deltaTime = performance.now() - throttleTime 
+
+                //these numbers do not make sense, just practically fugired them out
+                const isEnoughX = Math.abs(x - prevPos[0])**1.4 * deltaTime > 80
+                const isEnoughY = Math.abs(y - prevPos[1])**1.4 * deltaTime > 80
+
+                if (!isEnoughX && !isEnoughY) return
+
+                drawAPI.createLinePartLive(ctx, [x * ratio, y * ratio], size, me.color)
+
+                const msg = {
+                    cmd: CMDS.LINE,
+                    payload: `${size / ratio},${x};${y}`
+                }
+
+                setHistory((prev) => {
+                    if (getHistoryCursor() !== -1) {
+                        return [...prev.slice(0, getHistoryCursor() + 1), msg]
+                    }
+
+                    prev.push(msg)
+
+                    return prev
+                })
+
+                setHistoryCursor(-1)
+
+                wsClient.send(msg)
+
+                prevPos = [x, y]
+                throttleTime = performance.now()
+            }
+        }()
+
+        function frameHandler() {
+            if (!getIsDrawing()) return requestAnimationFrame(frameHandler)
+
+            console.log("animhandler")
+            
+            const [pageOffsetX, pageOffsetY] = getPageOffset()
+            const [scrollOffsetX, scrollOffsetY] = getScrollOffset()
+            const [x, y] = getPosition()
+
+            const offsetCoords = [
+                Math.round(x - pageOffsetX + scrollOffsetX),
+                Math.round(y - pageOffsetY + scrollOffsetY)
+            ] as const
+
+            drawLinePart(offsetCoords, pixelRatio, props.brushSize)
+
+            requestAnimationFrame(frameHandler)
+        }
+
+        requestAnimationFrame(frameHandler)
+
+        createEffect((prevIsDrawing) => {
+            const history = getHistory()
+            const isDrawing = getIsDrawing()
+
+            if (prevIsDrawing && !isDrawing && history[history.length - 1]?.cmd === CMDS.LINE) drawEndLine()
+
+            console.log("#ND LINE")
+
+            return isDrawing
         }, false)
 
         createEffect(on(getScrollOffset, drawEndLine))
 
         createEffect((prevCursor: number) => {
-            if (!canvas) return history.cursor
+            const history = getHistory()
+            const historyCursor = getHistoryCursor()
 
-            if (history.cursor === -1) return history.cursor
+            if (!canvas) return historyCursor
+
+            if (historyCursor === -1) return historyCursor
 
             ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-            for (let i = 0; i <= history.cursor; i++) {
-                const msg = history.items[i]
+            for (let i = 0; i <= historyCursor; i++) {
+                const msg = history[i]
 
                 switch (msg.cmd) {
                     case CMDS.LINE: {
@@ -143,32 +189,32 @@ export default function MyCanvas(props: Props) {
                         break
                     }
                     case CMDS.ENDLINE: {
-                        drawAPI.createEndLine(ctx)
+                        drawAPI.createLineEnd(ctx)
 
                         break
                     }
                 }
             }
 
-            const isUndo = prevCursor === -1 || prevCursor > history.cursor
+            const isUndo = prevCursor === -1 || prevCursor > historyCursor
 
             if (isUndo) {
                 const msg = {
                     cmd: CMDS.UNDO,
-                    payload: (history.cursor + 1).toString()
+                    payload: (historyCursor + 1).toString()
                 }
 
                 wsClient.send(msg)
             } else {
                 const msg = {
                     cmd: CMDS.REDO,
-                    payload: JSON.stringify(history.items.slice(prevCursor + 1, history.cursor + 1))
+                    payload: JSON.stringify(history.slice(prevCursor + 1, historyCursor + 1))
                 }
 
                 wsClient.send(msg)
             }
 
-            return history.cursor
+            return historyCursor
         }, -1)
 
         function onPointerMove(event: PointerEvent) {
@@ -196,11 +242,14 @@ export default function MyCanvas(props: Props) {
 
             const canvasRect = canvas.getBoundingClientRect()
 
-            setPageOffset([canvasRect.x, canvasRect.y])
+            setPageOffset([Math.max(canvasRect.x, 0), Math.max(canvasRect.y, 0)])
 
-            //pixelRatio = window.devicePixelRatio
-            //canvas.width = 1920 * pixelRatio
-            //canvas.height = 1080 * pixelRatio
+            const band = document.querySelector(".canvases-band")
+
+            if (band) {
+                setScrollOffset([band.scrollLeft, band.scrollTop])
+
+            }
 
             drawEndLine()
         }, false)
@@ -208,7 +257,7 @@ export default function MyCanvas(props: Props) {
 
     function getBrushStyles() {
         const size = props.brushSize
-        const [x, y] = position()
+        const [x, y] = getPosition()
         return {
             width: `${size} px`,
             height: `${size} px`,

@@ -71,7 +71,6 @@ export default function Canvases(props: Comp) {
                 const [x, y] = pos.split(";").map(Number)
 
                 if (isInstant) {
-                    console.log("opti")
                     drawAPI.createLinePart(
                         ctx,
                         [+x * pixelRatio, +y * pixelRatio],
@@ -90,7 +89,7 @@ export default function Canvases(props: Comp) {
                 break
             }
             case CMDS.ENDLINE: {
-                drawAPI.createEndLine(ctx)
+                drawAPI.createLineEnd(ctx)
 
                 break
             }
