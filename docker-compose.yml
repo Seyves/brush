@@ -21,13 +21,13 @@ services:
     container_name: brushserver
     restart: always
     ports:
-      - '127.0.0.1:8002:8002'
+      - '8002:8002'
   brushclient:
     build: ./client
     container_name: brushclient
     restart: always
     ports:
-      - '127.0.0.1:8003:8003'
+      - '80:80'
 
 volumes:
   redis_volume_data:

@@ -32,9 +32,9 @@ export default function Canvases(props: Comp) {
                 const context = canvas.getContext("2d") as CanvasRenderingContext2D
 
                 canvas.style.width = `1920px`
-                canvas.style.height = `1080px`
+                canvas.style.height = `1020px`
                 canvas.width = 1920 * window.devicePixelRatio
-                canvas.height = 1080 * window.devicePixelRatio
+                canvas.height = 1020 * window.devicePixelRatio
 
                 contexts[user] = context
             }

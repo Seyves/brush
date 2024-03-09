@@ -33,9 +33,9 @@ export default function MyCanvas(props: Props) {
         if (!canvas) return
 
         canvas.style.width = `1920px`
-        canvas.style.height = `1080px`
+        canvas.style.height = `1020px`
         canvas.width = 1920 * pixelRatio
-        canvas.height = 1080 * pixelRatio
+        canvas.height = 1020 * pixelRatio
 
         const ctx = canvas.getContext("2d")
 
@@ -46,6 +46,7 @@ export default function MyCanvas(props: Props) {
         setPageOffset([Math.max(canvasRect.x, 0), Math.max(canvasRect.y, 0)])
 
         const drawEndLine = function() {
+            console.log("drawing end line")
             drawAPI.createLineEnd(ctx)
 
             const msg = {
@@ -93,14 +94,16 @@ export default function MyCanvas(props: Props) {
                 ratio: number,
                 size: number
             ) {
-                const deltaTime = performance.now() - throttleTime 
+                const deltaTime = performance.now() - throttleTime
 
                 //these numbers do not make sense, just practically fugired them out
-                const isEnoughX = Math.abs(x - prevPos[0])**1.4 * deltaTime > 80
-                const isEnoughY = Math.abs(y - prevPos[1])**1.4 * deltaTime > 80
+                const isEnoughX = Math.abs(x - prevPos[0]) ** 1.4 * deltaTime > 80
+                const isEnoughY = Math.abs(y - prevPos[1]) ** 1.4 * deltaTime > 80
 
                 if (!isEnoughX && !isEnoughY) return
 
+                console.log(x, y)
+                console.log("drawing line")
                 drawAPI.createLinePartLive(ctx, [x * ratio, y * ratio], size, me.color)
 
                 const msg = {
@@ -130,8 +133,6 @@ export default function MyCanvas(props: Props) {
         function frameHandler() {
             if (!getIsDrawing()) return requestAnimationFrame(frameHandler)
 
-            console.log("animhandler")
-            
             const [pageOffsetX, pageOffsetY] = getPageOffset()
             const [scrollOffsetX, scrollOffsetY] = getScrollOffset()
             const [x, y] = getPosition()
@@ -153,8 +154,6 @@ export default function MyCanvas(props: Props) {
             const isDrawing = getIsDrawing()
 
             if (prevIsDrawing && !isDrawing && history[history.length - 1]?.cmd === CMDS.LINE) drawEndLine()
-
-            console.log("#ND LINE")
 
             return isDrawing
         }, false)
@@ -225,7 +224,8 @@ export default function MyCanvas(props: Props) {
 
         canvas.addEventListener("pointermove", onPointerMove)
 
-        function onPointerDown() {
+        function onPointerDown(event: PointerEvent) {
+            setPosition([event.pageX, event.pageY])
             setIsDrawing(true)
             document.addEventListener("pointerup", onPointerUp)
         }
@@ -248,10 +248,11 @@ export default function MyCanvas(props: Props) {
 
             if (band) {
                 setScrollOffset([band.scrollLeft, band.scrollTop])
-
             }
 
-            drawEndLine()
+            const history = getHistory()
+
+            if (history[history.length - 1]?.cmd === CMDS.LINE) drawEndLine()
         }, false)
     })
 

@@ -49,8 +49,6 @@ func GetDraws(w http.ResponseWriter, r *http.Request) {
 
     allDraws = allDraws[1:len(allDraws)-1]
 
-    log.Println(allDraws)
-
 	if err != nil {
         log.Print("[GetDraws] Error: ", err)
         sendError(w, 500, "Internal Server Error")

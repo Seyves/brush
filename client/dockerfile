@@ -2,9 +2,9 @@ FROM node:18-alpine
 
 WORKDIR /client-app
 
-ENV VITE_SERVER_URL=127.0.0.1:8002
+ENV VITE_SERVER_URL=192.168.31.160:8002
 
-EXPOSE 8001
+EXPOSE 80
 
 COPY package.json ./
 
@@ -14,4 +14,4 @@ COPY . ./
 
 RUN npm run build
 
-CMD [ "npm", "run", "dev" ]
+CMD [ "npm", "run", "preview" ]
